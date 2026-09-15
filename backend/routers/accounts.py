@@ -46,6 +46,56 @@ def _account_summary(a: Account, db: Session) -> dict:
     }
 
 
+def _bulk_summaries(accounts: list[Account], db: Session) -> list[dict]:
+    """
+    _account_summary()를 계정 수만큼 반복 호출하면 계정당 3개씩 쿼리가 나가
+    (원격 Postgres에서) 60개 거래처 기준 180번의 왕복이 발생한다. 대신 딱 3번의
+    쿼리로 전체를 가져와 메모리에서 매칭한다.
+    """
+    codes = [a.code for a in accounts]
+    if not codes:
+        return []
+    opp_by_code = {
+        o.account_code: o
+        for o in db.query(Opportunity).filter(Opportunity.account_code.in_(codes)).all()
+    }
+    risk_by_code = {
+        r.account_code: r
+        for r in db.query(RiskAssessment).filter(RiskAssessment.account_code.in_(codes)).all()
+    }
+    stage_by_code = {
+        s.account_code: s
+        for s in db.query(AccountPipelineState)
+        .filter(AccountPipelineState.account_code.in_(codes))
+        .all()
+    }
+    result = []
+    for a in accounts:
+        opp = opp_by_code.get(a.code)
+        risk = risk_by_code.get(a.code)
+        stage = stage_by_code.get(a.code)
+        result.append(
+            {
+                "code": a.code,
+                "name": a.name,
+                "industry": a.industry,
+                "region": a.region,
+                "credit_grade": a.credit_grade,
+                "contract_size_tier": a.contract_size_tier,
+                "rep_sls_code": a.rep_sls_code,
+                "contract_start_date": a.contract_start_date,
+                "contract_end_date": a.contract_end_date,
+                "annual_revenue": a.annual_revenue,
+                "main_contact_name": a.main_contact_name,
+                "main_contact_phone": a.main_contact_phone,
+                "current_stage": stage.current_stage if stage else None,
+                "opportunity_score": opp.opportunity_score if opp else None,
+                "risk_tier": risk.risk_tier if risk else None,
+            }
+        )
+    return result
+
+
 @router.get("")
 def list_accounts(
     industry: str | None = None,
@@ -57,7 +107,7 @@ def list_accounts(
     if industry:
         query = query.filter(Account.industry == industry)
     accounts = query.order_by(Account.name).all()
-    result = [_account_summary(a, db) for a in accounts]
+    result = _bulk_summaries(accounts, db)
     if risk_tier:
         result = [r for r in result if r["risk_tier"] == risk_tier]
     return _build_response(result)

@@ -32,23 +32,36 @@ def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(require_adm
         db.query(RiskAssessment).filter(RiskAssessment.risk_tier.in_(["주의", "위험"])).count()
     )
 
+    # 담당자 수만큼 반복 쿼리하면(원격 Postgres 기준 담당자당 3번, 최대 120번 왕복) 매우
+    # 느려지므로, 전체 거래처/위험도/기회 데이터를 한 번씩만 가져와 메모리에서 집계한다.
     reps = db.query(User).filter(User.role == "sales", User.is_active == True).all()  # noqa: E712
+    all_accounts = db.query(Account.code, Account.rep_sls_code).all()
+    codes_by_rep: dict[str, list[str]] = {}
+    for code, rep_sls_code in all_accounts:
+        codes_by_rep.setdefault(rep_sls_code, []).append(code)
+
+    risky_codes = {
+        r.account_code
+        for r in db.query(RiskAssessment.account_code)
+        .filter(RiskAssessment.risk_tier.in_(["주의", "위험"]))
+        .all()
+    }
+    new_opp_codes = {
+        o.account_code
+        for o in db.query(Opportunity.account_code).filter(Opportunity.status == "신규").all()
+    }
+
     rep_status = []
     for rep in reps:
-        accounts = db.query(Account).filter(Account.rep_sls_code == rep.sls_code).all()
-        codes = [a.code for a in accounts]
+        codes = codes_by_rep.get(rep.sls_code, [])
         rep_status.append(
             {
                 "sls_code": rep.sls_code,
                 "display_name": rep.display_name,
                 "team": rep.team,
                 "account_count": len(codes),
-                "at_risk_count": db.query(RiskAssessment)
-                .filter(RiskAssessment.account_code.in_(codes), RiskAssessment.risk_tier.in_(["주의", "위험"]))
-                .count(),
-                "new_opportunity_count": db.query(Opportunity)
-                .filter(Opportunity.account_code.in_(codes), Opportunity.status == "신규")
-                .count(),
+                "at_risk_count": sum(1 for c in codes if c in risky_codes),
+                "new_opportunity_count": sum(1 for c in codes if c in new_opp_codes),
             }
         )
 
