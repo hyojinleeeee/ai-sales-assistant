@@ -1,20 +1,30 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import http, { unwrap } from "../../api";
 
 const router = useRouter();
 const data = ref(null);
 const accounts = ref([]);
+const accountsLoading = ref(false);
 const selectedDept = ref("전체");
 
-onMounted(async () => {
-  const [dashData, accountsData] = await Promise.all([
-    unwrap(http.get("/dashboard/admin")),
-    unwrap(http.get("/accounts")),
-  ]);
-  data.value = dashData;
-  accounts.value = accountsData;
+async function loadDashboard() {
+  data.value = await unwrap(http.get("/dashboard/admin"));
+}
+loadDashboard();
+
+// 고객사 목록은 대시보드 로딩과 무관하게, 실제로 특정 부서를 골랐을 때만 필요하다.
+// 항상 같이 불러오면(Promise.all) 서버리스 콜드스타트가 겹쳐 대시보드 자체가 느려지므로
+// 부서 선택 시에만, 그리고 한 번만 불러온다.
+watch(selectedDept, async (dept) => {
+  if (dept === "전체" || accounts.value.length || accountsLoading.value) return;
+  accountsLoading.value = true;
+  try {
+    accounts.value = await unwrap(http.get("/accounts"));
+  } finally {
+    accountsLoading.value = false;
+  }
 });
 
 const repInfo = computed(() => {
@@ -80,7 +90,8 @@ function openAccount(code) {
 
     <template v-else>
       <div class="section-title" style="margin-top:0;">{{ selectedDept }} · 접촉 고객사 및 진행현황</div>
-      <table class="simple">
+      <div class="muted" v-if="accountsLoading">불러오는 중...</div>
+      <table class="simple" v-else>
         <thead>
           <tr><th>고객사</th><th>담당자</th><th>업종</th><th>영업단계</th><th>위험도</th><th>기회점수</th></tr>
         </thead>
@@ -95,7 +106,7 @@ function openAccount(code) {
           </tr>
         </tbody>
       </table>
-      <div class="muted" v-if="!accountsForDept.length" style="margin-top:8px;">이 부서가 담당하는 고객사가 없습니다.</div>
+      <div class="muted" v-if="!accountsLoading && !accountsForDept.length" style="margin-top:8px;">이 부서가 담당하는 고객사가 없습니다.</div>
     </template>
   </div>
   <div v-else class="muted">불러오는 중...</div>
