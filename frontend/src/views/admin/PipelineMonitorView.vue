@@ -11,16 +11,13 @@ const meetings = ref([]); // from /api/meetings
 const selectedDept = ref("전체");
 
 onMounted(async () => {
-  const [summaryData, usersData, accountsData, meetingsData] = await Promise.all([
-    unwrap(http.get("/pipeline/summary")),
-    unwrap(http.get("/users")),
-    unwrap(http.get("/accounts")),
-    unwrap(http.get("/meetings")),
-  ]);
-  summary.value = summaryData;
-  reps.value = usersData;
-  accounts.value = accountsData;
-  meetings.value = meetingsData;
+  // 4개를 Promise.all로 한꺼번에 쏘면 서버리스 콜드스타트가 겹치고 DB 커넥션 풀도
+  // 동시에 눌러써서 오히려 더 느려진다(원격 Postgres에서 확인됨). 순서대로 하나씩
+  // 불러오면서, 화면 위쪽(전체 파이프라인)부터 먼저 뜨도록 한다.
+  summary.value = await unwrap(http.get("/pipeline/summary"));
+  reps.value = await unwrap(http.get("/users"));
+  accounts.value = await unwrap(http.get("/accounts"));
+  meetings.value = await unwrap(http.get("/meetings"));
 });
 
 function pct(n, total) {

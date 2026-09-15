@@ -11,12 +11,10 @@ const accounts = ref([]);
 const renewalOnly = ref(false);
 
 onMounted(async () => {
-  const [riskData, accountData] = await Promise.all([
-    unwrap(http.get("/risk")),
-    unwrap(http.get("/accounts")),
-  ]);
-  risks.value = riskData;
-  accounts.value = accountData;
+  // 동시 요청은 원격 Postgres에서 콜드스타트/커넥션풀 경합으로 오히려 느려질 수 있어
+  // 순서대로 불러온다.
+  risks.value = await unwrap(http.get("/risk"));
+  accounts.value = await unwrap(http.get("/accounts"));
 });
 
 const accountInfo = computed(() => {
