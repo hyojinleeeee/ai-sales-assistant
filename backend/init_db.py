@@ -163,7 +163,6 @@ def seed():
 
     sales_df = txn_df[txn_df["거래유형"] == "매출"]
     service_groups = sales_df.groupby(["거래처코드", "품목카테고리", "품목명"])
-    account_services_map = {code: set() for code in account_codes}
     for (code, category, item_name), group in service_groups:
         db.add(
             AccountService(
@@ -175,7 +174,6 @@ def seed():
                 txn_count=len(group),
             )
         )
-        account_services_map[code].add(item_name)
     db.commit()
     print(f"[INFO] account_transactions/services 시드 완료: {len(txn_df)}건 거래")
 
@@ -231,11 +229,9 @@ def seed():
     print(f"[INFO] rep_performance 시드 완료: {len(perf_df)}명")
 
     # ------------------------------------------------- AI 파생 필드 계산
-    co_occurrence = ai_rules.build_service_co_occurrence(account_services_map)
     all_revenues = [a.annual_revenue for a in db.query(Account).all()]
 
     for account in db.query(Account).all():
-        owned = account_services_map.get(account.code, set())
         txns = (
             db.query(AccountTransaction)
             .filter(AccountTransaction.account_code == account.code)
@@ -257,19 +253,16 @@ def seed():
         )
 
         opp = ai_rules.compute_opportunity(
-            account.code,
-            owned,
+            {"industry": account.industry, "contract_size_tier": account.contract_size_tier},
             account.annual_revenue,
             all_revenues,
             interest_rate,
             days_since,
-            co_occurrence,
         )
-        current_services_text = ", ".join(sorted(owned)) if owned else "없음"
         db.add(
             Opportunity(
                 account_code=account.code,
-                current_service_summary=current_services_text,
+                current_service_summary=opp["current_service_summary"],
                 recommended_service=opp["recommended_service"],
                 ai_rationale=opp["ai_rationale"],
                 opportunity_score=opp["opportunity_score"],

@@ -95,8 +95,8 @@ async function generateEtnersProposal(code) {
             <li v-for="(f, i) in marketFit[o.account_code].fit_findings" :key="i">{{ f }}</li>
           </ul>
           <div style="font-size:13.5px;">
-            <b>추천 이트너스 서비스:</b> {{ marketFit[o.account_code].recommended_service }}
-            <span class="muted">— {{ marketFit[o.account_code].recommended_service_desc }}</span>
+            <b>추천 이트너스 서비스:</b> {{ marketFit[o.account_code].recommended_services_label }}
+            <div class="muted" style="font-size:12px;">{{ marketFit[o.account_code].recommended_service_desc }}</div>
           </div>
           <div style="color:var(--accent-dark);font-weight:600;font-size:13px;">▶ {{ marketFit[o.account_code].recommendation }}</div>
           <button

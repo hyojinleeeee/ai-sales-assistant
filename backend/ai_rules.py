@@ -23,31 +23,66 @@ SIMULATED_TODAY = datetime(2025, 9, 1)
 
 PIPELINE_STAGES = ["영업기회 발견", "고객접촉", "미팅", "제안", "협의", "계약", "고객관리"]
 
-# 실제 거래처_매입매출_데이터.xlsx의 품목카테고리="IT서비스" 8개 품목.
-# 넥스트라인이 거래처에 "추가로 붙여 팔 수 있는" 서비스형 상품만 추천 후보로 삼는다.
-# (원자재/부품/소모품/완제품/물류 품목은 거래처의 "현재 이용 현황" 표시에는 포함되지만
-# 추천 대상에서는 제외한다 — 이미 원자재를 사는 거래처에 원자재를 "추천"하는 건 의미가 없다.)
-CORE_SERVICES = [
-    "DB관리",
-    "ERP유지보수",
-    "SW라이선스",
-    "네트워크관리",
-    "모니터링",
-    "백업서비스",
-    "보안솔루션",
-    "클라우드호스팅",
-]
+# 이트너스가 실제로 제공하는 경영지원(BPO) 서비스 라인업. 넥스트라인 거래처가 "현재 이용
+# 중"이거나 "추천 대상"이 되는 서비스는 전부 이 카탈로그 안에서만 고른다 — 예전에는 IT서비스
+# 가상 상품(DB관리/ERP유지보수 등)을 썼지만, 이 앱을 이트너스의 실제 영업 도구로 쓰기로 하면서
+# 실제 이트너스 사업명으로 전면 교체했다. 이름은 실무에서 쓰는 축약 표현을 그대로 따른다
+# (예: RELOCATION팀 → "릴로", MOVING팀 → "무빙").
+ETNERS_SERVICES = {
+    "HR": "급여 계산·지급과 복리후생(포인트/리워드) 운영을 함께 대행하는 인사 서비스",
+    "SHARED SERVICE": "인사·총무 업무 전반을 통합 대행하는 경영지원 서비스",
+    "ESRM": "임직원 업무요청(급여/복리후생/총무 등)을 한곳에서 접수·처리하는 기록관리 솔루션",
+    "릴로": "해외 주재원 파견, 외국인 임직원의 비자·거주 등 정착 전반을 지원하는 이주 지원 서비스",
+    "무빙": "임직원 이사를 지원하는 서비스",
+    "GHD": "외국인 근로자의 채용·비자·정착을 지원하는 서비스",
+    "HOUSING": "임직원 사택·주거 지원 운영 서비스",
+    "BIDDING": "구매·입찰 프로세스 대행 서비스",
+}
 
 SERVICE_BENEFITS = {
-    "DB관리": "데이터베이스 운영/백업을 전문 위탁해 장애 대응 속도를 높입니다.",
-    "ERP유지보수": "ERP 시스템 오류 대응과 업데이트를 안정적으로 지원합니다.",
-    "SW라이선스": "사용 중인 소프트웨어의 라이선스 관리와 최신 버전 유지를 돕습니다.",
-    "네트워크관리": "사내 네트워크 장애를 사전에 모니터링하고 신속히 대응합니다.",
-    "모니터링": "시스템/설비 이상을 실시간으로 감지해 다운타임을 줄입니다.",
-    "백업서비스": "핵심 데이터를 정기적으로 백업해 장애·재해 시 손실을 최소화합니다.",
-    "보안솔루션": "외부 위협으로부터 시스템과 데이터를 보호합니다.",
-    "클라우드호스팅": "자체 서버 운영 부담 없이 안정적인 클라우드 인프라를 제공합니다.",
+    "HR": "매월 반복되는 급여 계산과 복리후생 운영 부담을 전문 대행으로 줄일 수 있습니다.",
+    "SHARED SERVICE": "인사/총무 담당 인력을 늘리지 않고도 표준화된 프로세스로 업무 품질을 높일 수 있습니다.",
+    "ESRM": "이메일·전화·메신저로 흩어져 있던 임직원 요청을 한 곳에서 추적·관리해 누락을 없앨 수 있습니다.",
+    "릴로": "해외 주재원 파견 시 발생하는 비자·거주 등 행정 부담을 전문 대행사에 위임할 수 있습니다.",
+    "무빙": "임직원 이사 지원 업무를 총무팀이 직접 처리하지 않아도 됩니다.",
+    "GHD": "외국인 근로자 채용과 정착 과정의 행정 부담을 줄일 수 있습니다.",
+    "HOUSING": "지방/해외 발령 임직원의 주거 문제를 표준화된 절차로 지원할 수 있습니다.",
+    "BIDDING": "구매/입찰 프로세스를 표준화해 처리 시간과 리스크를 줄일 수 있습니다.",
 }
+
+# 실제 "외국인 근로자 수" 같은 데이터는 없으므로, 업종 특성(원자재/물류처럼 해외 소싱·운송
+# 비중이 큰 업종일수록 해외 인력 이동 수요도 클 것이라는 가정)과 기업 규모로 대신 판단한다.
+# 이 가정은 근거 문장에 그대로 노출해 참고용임을 밝힌다.
+GLOBAL_MOBILITY_INDUSTRIES = {"물류업체", "원자재공급"}
+
+
+def determine_etners_services(industry: str, size_tier: str) -> list:
+    """
+    이 거래처가 (이미 이용 중이거나, 신규 영업 대상이라면 우선 제안할) 이트너스 서비스
+    묶음을 결정한다. 같은 회사 프로필이면 항상 같은 결과가 나오도록 결정론적으로 계산한다.
+    """
+    if industry in GLOBAL_MOBILITY_INDUSTRIES:
+        return ["릴로", "무빙", "GHD"]
+    if size_tier == "A(대형)":
+        return ["SHARED SERVICE"]
+    if size_tier == "B(중형)":
+        return ["ESRM"]
+    return ["HR"]
+
+
+# 이미 보유한 서비스 묶음 다음으로 자연스럽게 이어지는 업셀 대상. 회사 프로필이
+# determine_etners_services()로 나뉘는 4가지 경우의 수에 고정되어 있으므로, 실제 장바구니
+# 동시구매 분석 대신 "다음 단계로 흔히 확장하는 서비스"를 명시적으로 정의한다.
+UPSELL_NEXT = {
+    frozenset(["릴로", "무빙", "GHD"]): "HOUSING",
+    frozenset(["SHARED SERVICE"]): "ESRM",
+    frozenset(["ESRM"]): "SHARED SERVICE",
+    frozenset(["HR"]): "ESRM",
+}
+
+
+def next_upsell(owned: list) -> str:
+    return UPSELL_NEXT.get(frozenset(owned), "BIDDING")
 
 # VOC태그 -> 담당자가 바로 이해할 수 있는 표현
 VOC_TAG_PLAIN = {
@@ -69,21 +104,35 @@ NEGATIVE_VOC_TAGS = {"이탈징후", "서비스불만", "배송불만", "가격�
 # --- 미팅 노트 키워드 시뮬레이션(§4E) ------------------------------------
 
 KEYWORD_MAP = {
-    "db": "DB관리",
-    "데이터베이스": "DB관리",
-    "erp": "ERP유지보수",
-    "전사자원": "ERP유지보수",
-    "라이선스": "SW라이선스",
-    "license": "SW라이선스",
-    "네트워크": "네트워크관리",
-    "망관리": "네트워크관리",
-    "모니터링": "모니터링",
-    "감시": "모니터링",
-    "백업": "백업서비스",
-    "보안": "보안솔루션",
-    "해킹": "보안솔루션",
-    "클라우드": "클라우드호스팅",
-    "호스팅": "클라우드호스팅",
+    "급여": "HR",
+    "페이롤": "HR",
+    "payroll": "HR",
+    "복지": "HR",
+    "복리후생": "HR",
+    "리워드": "HR",
+    "인사": "SHARED SERVICE",
+    "총무": "SHARED SERVICE",
+    "경영지원": "SHARED SERVICE",
+    "esrm": "ESRM",
+    "업무요청": "ESRM",
+    "기록관리": "ESRM",
+    "주재원": "릴로",
+    "비자": "릴로",
+    "이주": "릴로",
+    "relocation": "릴로",
+    "릴로": "릴로",
+    "이사": "무빙",
+    "moving": "무빙",
+    "무빙": "무빙",
+    "외국인근로자": "GHD",
+    "외국인 근로자": "GHD",
+    "ghd": "GHD",
+    "사택": "HOUSING",
+    "주거": "HOUSING",
+    "housing": "HOUSING",
+    "입찰": "BIDDING",
+    "구매": "BIDDING",
+    "bidding": "BIDDING",
 }
 
 PAIN_KEYWORDS = {
@@ -129,46 +178,21 @@ def _days_since(date_str, reference=None):
     return max(0, (reference - d).days)
 
 
-def build_service_co_occurrence(account_services_map: dict) -> dict:
-    """
-    account_services_map: {account_code: set(item_name, ...)} — 원자재/부품/소모품/완제품/
-    물류/IT서비스 등 실제 거래 품목 전체(카테고리 무관)를 담은 집합.
-
-    반환: {(it_service, other_item): 두 품목을 함께 구매한 거래처 수}. CORE_SERVICES(추천
-    후보인 IT서비스 8종) 각각에 대해, 그 거래처가 함께 사거나 안 사는 "다른 모든 품목"과의
-    동시 구매 빈도를 계산한다 — 원자재/부품만 사는 거래처도 장바구니 유사도로 추천이
-    가능하도록, 짝을 CORE_SERVICES 안으로 제한하지 않는다.
-    """
-    all_sets = list(account_services_map.values())
-    all_items = set()
-    for s in all_sets:
-        all_items |= s
-
-    co = {}
-    for it_service in CORE_SERVICES:
-        for other in all_items:
-            if other == it_service:
-                continue
-            count = sum(1 for s in all_sets if it_service in s and other in s)
-            if count:
-                co[(it_service, other)] = count
-    return co
-
-
 def compute_opportunity(
-    account_code: str,
-    owned_services: set,
+    account: dict,
     revenue: float,
     all_revenues: list,
     interest_signal_rate: float,
     days_since_last_contact: int,
-    co_occurrence: dict,
 ) -> dict:
-    """영업기회 점수(0~100)와 추천 서비스를 계산한다."""
+    """영업기회 점수(0~100)와 현재/추천 이트너스 서비스를 계산한다."""
+    owned = determine_etners_services(account.get("industry"), account.get("contract_size_tier"))
+    owned_set = set(owned)
+
     size_score = _percentile_rank(revenue, all_revenues) * 40
 
-    missing = [s for s in CORE_SERVICES if s not in owned_services]
-    coverage_gap_ratio = len(missing) / len(CORE_SERVICES)
+    missing = [s for s in ETNERS_SERVICES if s not in owned_set]
+    coverage_gap_ratio = len(missing) / len(ETNERS_SERVICES)
     coverage_score = coverage_gap_ratio * 25
 
     interest_score = _clamp(interest_signal_rate, 0, 1) * 20
@@ -178,33 +202,16 @@ def compute_opportunity(
     total = round(size_score + coverage_score + interest_score + recency_score, 1)
     total = _clamp(total, 0, 100)
 
-    recommended_service = None
-    best_affinity = -1
-    affinity_note = ""
-    if missing:
-        for candidate in missing:
-            affinity = sum(
-                co_occurrence.get((candidate, owned), 0) for owned in owned_services
-            )
-            if affinity > best_affinity:
-                best_affinity = affinity
-                recommended_service = candidate
-        if recommended_service and best_affinity > 0:
-            affinity_note = (
-                f"보유 서비스와 함께 쓰이는 사례 {best_affinity}건을 근거로 "
-                f"'{recommended_service}'을(를) 추천했습니다."
-            )
-        elif recommended_service:
-            affinity_note = f"아직 다른 거래처와의 공통 사용 사례는 적지만, 미보유 서비스 중 하나로 '{recommended_service}'을(를) 제안합니다."
+    recommended_service = next_upsell(owned)
+    owned_label = ", ".join(owned)
 
     rationale_parts = [
         f"연간매출 규모 상위 {round((1 - _percentile_rank(revenue, all_revenues)) * 100)}% 수준(가중 {round(size_score,1)}점)",
-        f"보유하지 않은 서비스가 {len(missing)}/{len(CORE_SERVICES)}개로 확장 여지가 있음(가중 {round(coverage_score,1)}점)",
+        f"현재 이용 중인 서비스({owned_label}) 외 {len(missing)}/{len(ETNERS_SERVICES)}개 서비스가 확장 여지로 남아있음(가중 {round(coverage_score,1)}점)",
         f"최근 문의 중 관심 신호 비율 {round(interest_signal_rate*100)}%(가중 {round(interest_score,1)}점)",
         f"최근 거래 후 {days_since_last_contact}일 경과(가중 {round(recency_score,1)}점)",
+        f"현재 이용 중인 '{owned_label}'과(와) 자연스럽게 이어지는 다음 단계로 '{recommended_service}'를 제안합니다.",
     ]
-    if affinity_note:
-        rationale_parts.append(affinity_note)
 
     if total >= 70:
         action = "우선 컨택 후 제안 미팅 추진"
@@ -214,6 +221,8 @@ def compute_opportunity(
         action = "현재는 관망, 다음 분기 재평가"
 
     return {
+        "owned_services": owned,
+        "current_service_summary": owned_label,
         "opportunity_score": total,
         "recommended_service": recommended_service,
         "ai_rationale": " / ".join(rationale_parts),
@@ -410,7 +419,7 @@ def generate_proposal_draft(
     if meeting and meeting.get("extracted_pain_points"):
         key_problems.extend(meeting["extracted_pain_points"])
 
-    recommended = opportunity.get("recommended_service") or "CRM클라우드"
+    recommended = opportunity.get("recommended_service") or "ESRM"
     benefit = SERVICE_BENEFITS.get(recommended, "업무 효율 개선에 도움이 됩니다.")
 
     stage_next_steps = {
@@ -439,36 +448,13 @@ def generate_proposal_draft(
 # ============================================================================
 # 신규 영업(프로스펙팅) — 시장 전망 · 적합도 분석 · 이트너스 경영지원 제안서
 # ----------------------------------------------------------------------------
-# 위 CORE_SERVICES/SERVICE_BENEFITS는 "이미 거래 중인 60개 거래처에게 IT서비스를
-# 추가로 파는" 업셀 시나리오용이다. 이 섹션은 반대로 "이 거래처가 이트너스의 실제
-# 사업(인사·총무 경영지원 BPO)의 신규 영업 대상으로서 얼마나 매력적인가"를 평가해,
-# 영업담당자가 상부에 보고하거나 실제 컨택에 쓸 수 있는 제안서를 만드는 용도다.
-# 이트너스 실제 패밀리 서비스 라인업(etners.com/welcome.etners.com에서 확인한
-# 공식 서비스명)을 후보로 쓴다 — 넥스트라인이 파는 가상 서비스가 아니라 실제 이트너스
-# 사업이라는 점에서 위 섹션과 성격이 다르다.
+# 위쪽(compute_opportunity)이 "이미 거래 중인 60개 거래처에게 이트너스 서비스를 추가로
+# 파는" 업셀 시나리오라면, 이 섹션은 반대로 "이 거래처가 이트너스의 신규 영업 대상으로서
+# 얼마나 매력적인가"를 평가해 영업담당자가 상부에 보고하거나 실제 컨택에 쓸 수 있는
+# 제안서를 만드는 용도다. 추천 서비스는 위와 동일한 ETNERS_SERVICES/determine_etners_services
+# 를 그대로 재사용한다 — 신규 대상이면 "제안할 서비스", 기존 고객이면 "이미 쓰는 서비스"로
+# 의미만 달라질 뿐, 같은 회사 프로필은 항상 같은 서비스 묶음으로 매칭되어야 일관적이다.
 # ============================================================================
-
-ETNERS_SERVICES = {
-    "SHARED SERVICE": "인사·총무 업무 전반을 통합 대행하는 경영지원 서비스",
-    "ESRM": "임직원 업무요청(급여/복리후생/총무 등)을 한곳에서 접수·처리하는 기록관리 솔루션",
-    "PAYROLL": "급여 계산부터 지급까지 대행하는 급여 아웃소싱 서비스",
-    "GAMDONG TIME": "임직원 복지포인트·리워드 운영 서비스",
-    "HOUSING": "임직원 사택·주거 지원 운영 서비스",
-    "MOVING": "임직원 이사 지원 서비스",
-    "RELOCATION": "해외 주재원 등 임직원 이주 지원 서비스",
-    "BIDDING": "구매·입찰 프로세스 대행 서비스",
-}
-
-ETNERS_SERVICE_BENEFITS = {
-    "SHARED SERVICE": "인사/총무 담당 인력을 늘리지 않고도 표준화된 프로세스로 업무 품질을 높일 수 있습니다.",
-    "ESRM": "이메일·전화·메신저로 흩어져 있던 임직원 요청을 한 곳에서 추적·관리해 누락을 없앨 수 있습니다.",
-    "PAYROLL": "매월 반복되는 급여 계산/신고 업무 부담과 오류 리스크를 전문 대행으로 줄일 수 있습니다.",
-    "GAMDONG TIME": "임직원 복지 만족도를 높이는 리워드 운영을 직접 구축하지 않고 바로 도입할 수 있습니다.",
-    "HOUSING": "지방/해외 발령 임직원의 주거 문제를 표준화된 절차로 지원할 수 있습니다.",
-    "MOVING": "임직원 이사 지원 업무를 총무팀이 직접 처리하지 않아도 됩니다.",
-    "RELOCATION": "해외 주재원 파견 시 발생하는 행정 부담을 전문 대행사에 위임할 수 있습니다.",
-    "BIDDING": "구매/입찰 프로세스를 표준화해 처리 시간과 리스크를 줄일 수 있습니다.",
-}
 
 # 업종별로 "인사/총무 등 경영지원 수요가 얼마나 클 것으로 보이는가"에 대한 가중치.
 # 사무직 비중이 높고 조직 관리가 복잡할수록 높게 잡았다 — 실제 인사 데이터가 아니라
@@ -484,7 +470,6 @@ INDUSTRY_FIT_WEIGHT = {
 }
 
 SIZE_FIT_WEIGHT = {"A(대형)": 40, "B(중형)": 25, "C(소형)": 12}
-SIZE_TO_SERVICE = {"A(대형)": "SHARED SERVICE", "B(중형)": "ESRM", "C(소형)": "PAYROLL"}
 
 
 def _revenue_trend(transactions: list) -> tuple[str, float]:
@@ -553,7 +538,8 @@ def analyze_market_fit(account: dict, all_revenues: list, transactions: list) ->
         f"연매출 규모 상위 {100 - percentile}% 수준 (가중 {revenue_score}점).",
     ]
 
-    recommended_service = SIZE_TO_SERVICE.get(size_tier, "ESRM")
+    recommended_services = determine_etners_services(industry, size_tier)
+    services_label = " · ".join(recommended_services)
 
     if fit_score >= 65:
         recommendation = "신규 영업 우선순위가 높은 후보입니다. 담당자 컨택을 추천합니다."
@@ -568,17 +554,20 @@ def analyze_market_fit(account: dict, all_revenues: list, transactions: list) ->
         "trend": trend_label,
         "fit_score": fit_score,
         "fit_findings": fit_findings,
-        "recommended_service": recommended_service,
-        "recommended_service_desc": ETNERS_SERVICES.get(recommended_service, ""),
+        "recommended_services": recommended_services,
+        "recommended_services_label": services_label,
+        "recommended_service_desc": " / ".join(
+            f"{s}: {ETNERS_SERVICES.get(s, '')}" for s in recommended_services
+        ),
         "recommendation": recommendation,
     }
 
 
 def generate_etners_market_proposal(account: dict, market_fit: dict) -> dict:
     """market/fit 분석 결과를 바탕으로 신규 영업(프로스펙팅)용 이트너스 제안서를 만든다."""
-    service = market_fit["recommended_service"]
-    service_label = f"{service} ({ETNERS_SERVICES.get(service, '')})"
-    benefit = ETNERS_SERVICE_BENEFITS.get(service, "경영지원 업무 부담을 줄일 수 있습니다.")
+    services = market_fit["recommended_services"]
+    service_label = market_fit["recommended_services_label"]
+    benefits = "; ".join(SERVICE_BENEFITS.get(s, "경영지원 업무 부담을 줄일 수 있습니다.") for s in services)
 
     return {
         "customer_situation": (
@@ -591,6 +580,6 @@ def generate_etners_market_proposal(account: dict, market_fit: dict) -> dict:
         ],
         "solution_direction": f"이트너스 '{service_label}' 도입을 제안하여 경영지원 업무 효율화를 지원합니다.",
         "recommended_service": service_label,
-        "expected_effect": benefit,
+        "expected_effect": benefits,
         "next_steps": "1차 미팅을 통해 현재 인사/총무 운영 방식을 확인하고, 적합한 서비스 범위를 구체화합니다.",
     }

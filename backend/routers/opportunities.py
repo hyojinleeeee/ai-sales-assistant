@@ -9,7 +9,6 @@ from database import get_db
 from models import (
     Account,
     AccountInquirySignal,
-    AccountService,
     AccountTransaction,
     Opportunity,
     Proposal,
@@ -59,9 +58,6 @@ def get_opportunity(code: str, db: Session = Depends(get_db), user: User = Depen
 
 
 def _recompute_one(db: Session, account: Account) -> Opportunity:
-    services = db.query(AccountService).filter(AccountService.account_code == account.code).all()
-    owned = {s.service_name for s in services}
-
     all_revenues = [a.annual_revenue for a in db.query(Account).all()]
 
     txns = db.query(AccountTransaction).filter(AccountTransaction.account_code == account.code).all()
@@ -84,18 +80,16 @@ def _recompute_one(db: Session, account: Account) -> Opportunity:
         else 0
     )
 
-    all_services_map = {}
-    for a in db.query(Account).all():
-        svc = db.query(AccountService).filter(AccountService.account_code == a.code).all()
-        all_services_map[a.code] = {s.service_name for s in svc}
-    co_occurrence = ai_rules.build_service_co_occurrence(all_services_map)
-
     result = ai_rules.compute_opportunity(
-        account.code, owned, account.annual_revenue, all_revenues, interest_rate, days_since, co_occurrence
+        {"industry": account.industry, "contract_size_tier": account.contract_size_tier},
+        account.annual_revenue,
+        all_revenues,
+        interest_rate,
+        days_since,
     )
 
     opp = db.query(Opportunity).filter(Opportunity.account_code == account.code).first()
-    opp.current_service_summary = ", ".join(sorted(owned)) if owned else "없음"
+    opp.current_service_summary = result["current_service_summary"]
     opp.recommended_service = result["recommended_service"]
     opp.ai_rationale = result["ai_rationale"]
     opp.opportunity_score = result["opportunity_score"]
