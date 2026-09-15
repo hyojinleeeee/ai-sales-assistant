@@ -73,7 +73,12 @@ function open(code) {
 
 <template>
   <h2>고객 위험도 {{ auth.isAdmin ? '관리' : '알림' }}</h2>
-  <p class="muted">AI가 문의/이용 패턴을 분석해 감지한 참고 신호입니다. 계약 만료가 4개월 이내로 다가왔거나 AI가 특이사항을 감지한 고객사만 배경색으로 강조 표시됩니다.</p>
+  <p class="muted">
+    이미 이트너스 서비스를 이용 중인 기존 거래처에만 적용되는 기능입니다 (신규 발굴 대상 회사는 "AI 시장성·적합도 분석"에서 별도로 다룹니다).
+    점수는 클레임(이탈징후) 비율 하나만 보지 않고, <b>이탈징후 문의 비율·동일 유형 재문의 비율·평균 만족도 평점·계약 만료 임박 여부</b> 4가지를 종합해 계산합니다 —
+    클레임이 없어도 계약 만료가 가까우면 위험도가 올라갈 수 있습니다.
+  </p>
+  <p class="muted">계약 만료가 4개월 이내로 다가왔거나 AI가 특이사항(정상 외 등급)을 감지한 고객사만 배경색으로 강조 표시됩니다.</p>
 
   <label class="row" style="font-size:13.5px;margin-bottom:12px;">
     <input type="checkbox" v-model="renewalOnly" style="width:auto;" />

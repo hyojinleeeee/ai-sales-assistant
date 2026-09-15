@@ -1,7 +1,13 @@
 <script setup>
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { computed, onMounted, ref } from "vue";
+import { Pie } from "vue-chartjs";
 import { useRouter } from "vue-router";
 import http, { unwrap } from "../../api";
+
+ChartJS.register(ArcElement, Tooltip, Legend);
+
+const STAGE_COLORS = ["#2ec4b6", "#4a7fd6", "#ff6b6b", "#ffc86b", "#8b6bff", "#5fbf6f", "#c9c9c9"];
 
 const router = useRouter();
 const summary = ref(null);
@@ -64,6 +70,51 @@ const displayedCounts = computed(() => {
 const displayedTotal = computed(() =>
   Object.values(displayedCounts.value).reduce((a, b) => a + b, 0)
 );
+
+// 파이차트 데이터 — 스테이지별 색상은 STAGE_COLORS를 그대로 매핑해 범례 색과 일치시킨다.
+const pieData = computed(() => {
+  if (!summary.value) return { labels: [], datasets: [] };
+  return {
+    labels: summary.value.stages,
+    datasets: [
+      {
+        data: summary.value.stages.map((s) => displayedCounts.value[s] || 0),
+        backgroundColor: STAGE_COLORS,
+        borderColor: "#fff",
+        borderWidth: 2,
+      },
+    ],
+  };
+});
+
+const pieOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => {
+          const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+          const pct = total ? Math.round((ctx.parsed / total) * 1000) / 10 : 0;
+          return `${ctx.label}: ${ctx.parsed}개 (${pct}%)`;
+        },
+      },
+    },
+  },
+};
+
+// 차트 옆에 표시할 범례용 퍼센트 목록 (0건인 단계는 숨긴다).
+const stagePercents = computed(() => {
+  if (!summary.value) return [];
+  return summary.value.stages
+    .map((s, i) => {
+      const count = displayedCounts.value[s] || 0;
+      const pct = displayedTotal.value ? Math.round((count / displayedTotal.value) * 1000) / 10 : 0;
+      return { stage: s, count, pct, color: STAGE_COLORS[i] };
+    })
+    .filter((row) => row.count > 0);
+});
 
 const accountsForDept = computed(() => {
   if (selectedDept.value === "전체") return [];
@@ -167,6 +218,24 @@ function openAccount(code) {
       </div>
     </div>
     <div class="muted">{{ selectedDept }} 총 {{ displayedTotal }}개 고객사</div>
+  </div>
+
+  <div v-if="summary" class="card" style="margin-top:14px;">
+    <div class="muted" style="font-weight:600;margin-bottom:14px;">{{ selectedDept }} 영업 단계 보고서</div>
+    <div class="row" style="align-items:center;gap:28px;flex-wrap:wrap;">
+      <div style="width:200px;height:200px;flex-shrink:0;">
+        <Pie :data="pieData" :options="pieOptions" />
+      </div>
+      <div class="stack" style="gap:8px;">
+        <div v-for="row in stagePercents" :key="row.stage" class="row" style="gap:8px;font-size:13.5px;">
+          <span style="width:10px;height:10px;border-radius:50%;display:inline-block;" :style="{ background: row.color }"></span>
+          <span style="width:90px;">{{ row.stage }}</span>
+          <b>{{ row.pct }}%</b>
+          <span class="muted">({{ row.count }}개)</span>
+        </div>
+        <div class="muted" v-if="!stagePercents.length">표시할 데이터가 없습니다.</div>
+      </div>
+    </div>
   </div>
 
   <div class="section-title" style="margin-top:8px;">

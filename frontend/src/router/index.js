@@ -3,7 +3,6 @@ import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "../stores/authStore";
 
 import LoginView from "../views/LoginView.vue";
-import StaffLoginView from "../views/StaffLoginView.vue";
 
 import AdminDashboardView from "../views/admin/AdminDashboardView.vue";
 import RepManageView from "../views/admin/RepManageView.vue";
@@ -24,7 +23,6 @@ import RiskListView from "../views/shared/RiskListView.vue";
 const routes = [
   { path: "/", redirect: "/login" },
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
-  { path: "/login/staff", name: "staff-login", component: StaffLoginView, meta: { public: true } },
 
   { path: "/admin", name: "admin-dashboard", component: AdminDashboardView, meta: { role: "admin" } },
   { path: "/admin/reps", name: "admin-reps", component: RepManageView, meta: { role: "admin" } },
@@ -60,7 +58,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore();
   if (to.meta.public) {
-    if ((to.name === "login" || to.name === "staff-login") && auth.isAuthenticated) {
+    if (to.name === "login" && auth.isAuthenticated) {
       return auth.isAdmin ? { name: "admin-dashboard" } : { name: "sales-dashboard" };
     }
     return true;

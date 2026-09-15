@@ -25,9 +25,8 @@ const salesLinks = [
 ];
 
 function doLogout() {
-  const wasAdmin = auth.isAdmin;
   auth.logout();
-  window.location.href = wasAdmin ? "/login" : "/login/staff";
+  window.location.href = "/login";
 }
 </script>
 
