@@ -2,14 +2,16 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import http, { unwrap } from "../../api";
+import { useAuthStore } from "../../stores/authStore";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const proposal = ref(null);
 const saved = ref(false);
 
 onMounted(async () => {
-  if (route.name === "proposal-edit") {
+  if (route.name === "proposal-edit" || route.name === "admin-proposal-edit") {
     proposal.value = await unwrap(http.get(`/proposals/${route.params.id}`));
   } else {
     proposal.value = await unwrap(
@@ -37,7 +39,7 @@ async function save() {
 }
 
 function backToList() {
-  router.push({ name: "sales-proposals" });
+  router.push({ name: auth.isAdmin ? "admin-proposals" : "sales-proposals" });
 }
 </script>
 

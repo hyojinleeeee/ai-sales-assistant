@@ -2,8 +2,10 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import http, { unwrap } from "../../api";
+import { useAuthStore } from "../../stores/authStore";
 
 const router = useRouter();
+const auth = useAuthStore();
 const proposals = ref([]);
 
 onMounted(async () => {
@@ -11,7 +13,7 @@ onMounted(async () => {
 });
 
 function open(id) {
-  router.push({ name: "proposal-edit", params: { id } });
+  router.push({ name: auth.isAdmin ? "admin-proposal-edit" : "proposal-edit", params: { id } });
 }
 </script>
 

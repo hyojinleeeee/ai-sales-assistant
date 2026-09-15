@@ -12,6 +12,7 @@ from models import (
     AccountService,
     AccountTransaction,
     Opportunity,
+    Proposal,
     User,
 )
 from scoping import get_account_or_403, scoped_account_query
@@ -109,6 +110,74 @@ def recompute_opportunity(code: str, db: Session = Depends(get_db), user: User =
     account = get_account_or_403(db, user, code)
     opp = _recompute_one(db, account)
     return _build_response(_out(opp, account.name))
+
+
+@router.get("/{code}/market-fit")
+def get_market_fit(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    이미 거래 중인 고객 대상 업셀(위 opportunity_score)과는 별개로, 이 거래처가
+    이트너스의 실제 경영지원 사업(BPO) 신규 영업 대상으로서 얼마나 매력적인지를
+    평가한다. 시장 전망 + 우리 회사와의 적합도를 계산해 반환한다 (참고용, 저장 안 함).
+    """
+    account = get_account_or_403(db, user, code)
+    all_revenues = [a.annual_revenue for a in db.query(Account).all()]
+    txns = db.query(AccountTransaction).filter(AccountTransaction.account_code == code).all()
+
+    result = ai_rules.analyze_market_fit(
+        {
+            "name": account.name,
+            "industry": account.industry,
+            "region": account.region,
+            "contract_size_tier": account.contract_size_tier,
+            "annual_revenue": account.annual_revenue,
+        },
+        all_revenues,
+        [{"txn_date": t.txn_date, "amount": t.amount} for t in txns],
+    )
+    return _build_response(result)
+
+
+@router.post("/{code}/etners-proposal")
+def create_etners_proposal(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    시장성·적합도 분석 결과를 바탕으로 이 거래처를 신규 영업 대상으로 "리스트업"하는
+    이트너스 맞춤 제안서를 생성해 저장한다 (기존 제안서 목록/편집 화면에서 바로 보임).
+    """
+    account = get_account_or_403(db, user, code)
+    all_revenues = [a.annual_revenue for a in db.query(Account).all()]
+    txns = db.query(AccountTransaction).filter(AccountTransaction.account_code == code).all()
+
+    market_fit = ai_rules.analyze_market_fit(
+        {
+            "name": account.name,
+            "industry": account.industry,
+            "region": account.region,
+            "contract_size_tier": account.contract_size_tier,
+            "annual_revenue": account.annual_revenue,
+        },
+        all_revenues,
+        [{"txn_date": t.txn_date, "amount": t.amount} for t in txns],
+    )
+    draft = ai_rules.generate_etners_market_proposal(
+        {"name": account.name, "industry": account.industry, "contract_size_tier": account.contract_size_tier},
+        market_fit,
+    )
+
+    proposal = Proposal(
+        account_code=account.code,
+        rep_user_id=user.id,
+        customer_situation=draft["customer_situation"],
+        key_problems="\n".join(draft["key_problems"]),
+        solution_direction=draft["solution_direction"],
+        recommended_service=draft["recommended_service"],
+        expected_effect=draft["expected_effect"],
+        next_steps=draft["next_steps"],
+        status="초안",
+    )
+    db.add(proposal)
+    db.commit()
+    db.refresh(proposal)
+    return _build_response({"id": proposal.id, "account_code": proposal.account_code})
 
 
 @router.put("/{code}/status")

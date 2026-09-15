@@ -434,3 +434,163 @@ def generate_proposal_draft(
             account.get("current_stage", "영업기회 발견"), "다음 액션을 담당자가 정합니다."
         ),
     }
+
+
+# ============================================================================
+# 신규 영업(프로스펙팅) — 시장 전망 · 적합도 분석 · 이트너스 경영지원 제안서
+# ----------------------------------------------------------------------------
+# 위 CORE_SERVICES/SERVICE_BENEFITS는 "이미 거래 중인 60개 거래처에게 IT서비스를
+# 추가로 파는" 업셀 시나리오용이다. 이 섹션은 반대로 "이 거래처가 이트너스의 실제
+# 사업(인사·총무 경영지원 BPO)의 신규 영업 대상으로서 얼마나 매력적인가"를 평가해,
+# 영업담당자가 상부에 보고하거나 실제 컨택에 쓸 수 있는 제안서를 만드는 용도다.
+# 이트너스 실제 패밀리 서비스 라인업(etners.com/welcome.etners.com에서 확인한
+# 공식 서비스명)을 후보로 쓴다 — 넥스트라인이 파는 가상 서비스가 아니라 실제 이트너스
+# 사업이라는 점에서 위 섹션과 성격이 다르다.
+# ============================================================================
+
+ETNERS_SERVICES = {
+    "SHARED SERVICE": "인사·총무 업무 전반을 통합 대행하는 경영지원 서비스",
+    "ESRM": "임직원 업무요청(급여/복리후생/총무 등)을 한곳에서 접수·처리하는 기록관리 솔루션",
+    "PAYROLL": "급여 계산부터 지급까지 대행하는 급여 아웃소싱 서비스",
+    "GAMDONG TIME": "임직원 복지포인트·리워드 운영 서비스",
+    "HOUSING": "임직원 사택·주거 지원 운영 서비스",
+    "MOVING": "임직원 이사 지원 서비스",
+    "RELOCATION": "해외 주재원 등 임직원 이주 지원 서비스",
+    "BIDDING": "구매·입찰 프로세스 대행 서비스",
+}
+
+ETNERS_SERVICE_BENEFITS = {
+    "SHARED SERVICE": "인사/총무 담당 인력을 늘리지 않고도 표준화된 프로세스로 업무 품질을 높일 수 있습니다.",
+    "ESRM": "이메일·전화·메신저로 흩어져 있던 임직원 요청을 한 곳에서 추적·관리해 누락을 없앨 수 있습니다.",
+    "PAYROLL": "매월 반복되는 급여 계산/신고 업무 부담과 오류 리스크를 전문 대행으로 줄일 수 있습니다.",
+    "GAMDONG TIME": "임직원 복지 만족도를 높이는 리워드 운영을 직접 구축하지 않고 바로 도입할 수 있습니다.",
+    "HOUSING": "지방/해외 발령 임직원의 주거 문제를 표준화된 절차로 지원할 수 있습니다.",
+    "MOVING": "임직원 이사 지원 업무를 총무팀이 직접 처리하지 않아도 됩니다.",
+    "RELOCATION": "해외 주재원 파견 시 발생하는 행정 부담을 전문 대행사에 위임할 수 있습니다.",
+    "BIDDING": "구매/입찰 프로세스를 표준화해 처리 시간과 리스크를 줄일 수 있습니다.",
+}
+
+# 업종별로 "인사/총무 등 경영지원 수요가 얼마나 클 것으로 보이는가"에 대한 가중치.
+# 사무직 비중이 높고 조직 관리가 복잡할수록 높게 잡았다 — 실제 인사 데이터가 아니라
+# 업종 특성에 대한 합리적 가정이므로, 근거 문장에 "업종 특성상"이라고 명시한다.
+INDUSTRY_FIT_WEIGHT = {
+    "컨설팅": 30,
+    "IT솔루션": 28,
+    "서비스업체": 26,
+    "유통업체": 20,
+    "제조업체": 16,
+    "물류업체": 14,
+    "원자재공급": 12,
+}
+
+SIZE_FIT_WEIGHT = {"A(대형)": 40, "B(중형)": 25, "C(소형)": 12}
+SIZE_TO_SERVICE = {"A(대형)": "SHARED SERVICE", "B(중형)": "ESRM", "C(소형)": "PAYROLL"}
+
+
+def _revenue_trend(transactions: list) -> tuple[str, float]:
+    """
+    transactions: [{"txn_date": "YYYY-MM-DD", "amount": float}, ...]
+    최근 절반 기간과 이전 절반 기간의 총 거래금액을 비교해 추세를 판단한다.
+    """
+    dated = []
+    for t in transactions:
+        d = t.get("txn_date")
+        if not d:
+            continue
+        try:
+            dated.append((datetime.strptime(str(d)[:10], "%Y-%m-%d"), t.get("amount") or 0))
+        except ValueError:
+            continue
+    if len(dated) < 4:
+        return "보통", 0.0
+
+    dated.sort(key=lambda x: x[0])
+    mid = len(dated) // 2
+    earlier = sum(a for _, a in dated[:mid]) or 1
+    later = sum(a for _, a in dated[mid:])
+    growth = (later - earlier) / earlier
+
+    if growth >= 0.15:
+        return "상승", growth
+    if growth <= -0.15:
+        return "하락", growth
+    return "보통", growth
+
+
+def analyze_market_fit(account: dict, all_revenues: list, transactions: list) -> dict:
+    """
+    account: {"name","industry","region","contract_size_tier","annual_revenue"}
+    transactions: 이 거래처의 account_transactions 레코드 목록 (거래 추세 계산용)
+
+    반환: 시장 전망(market_outlook), 적합도 점수/근거(fit_score/fit_findings),
+    추천 이트너스 서비스(recommended_service)를 담은 dict. 전부 실제 보유 데이터
+    (업종/지역/매출/거래추세/기업규모)로부터 산출되며, 최종 판단은 영업담당자 몫이다.
+    """
+    revenue = account.get("annual_revenue") or 0
+    percentile = round(_percentile_rank(revenue, all_revenues) * 100)
+    trend_label, growth_rate = _revenue_trend(transactions)
+    industry = account.get("industry")
+    size_tier = account.get("contract_size_tier")
+
+    trend_sentence = {
+        "상승": f"최근 거래 규모가 이전 대비 {round(growth_rate*100)}% 늘어나는 추세로, 사업이 확장 국면에 있는 것으로 보입니다.",
+        "하락": f"최근 거래 규모가 이전 대비 {round(abs(growth_rate)*100)}% 줄어드는 추세로, 사업 축소 또는 거래 비중 감소 가능성이 있습니다.",
+        "보통": "최근 거래 규모는 큰 변동 없이 유지되고 있습니다.",
+    }[trend_label]
+
+    market_outlook = (
+        f"{industry} 업종, 연매출 규모는 전체 거래처 중 상위 {100 - percentile}% 수준입니다. {trend_sentence}"
+    )
+
+    size_score = SIZE_FIT_WEIGHT.get(size_tier, 12)
+    industry_score = INDUSTRY_FIT_WEIGHT.get(industry, 15)
+    revenue_score = round(_percentile_rank(revenue, all_revenues) * 30)
+    fit_score = _clamp(size_score + industry_score + revenue_score, 0, 100)
+
+    fit_findings = [
+        f"기업 규모 {size_tier} 등급 (가중 {size_score}점) — 규모가 클수록 인사/총무 업무량과 표준화 필요성이 커집니다.",
+        f"업종 특성상 {industry}은(는) 경영지원 수요가 {'높은' if industry_score >= 25 else '중간' if industry_score >= 18 else '상대적으로 낮은'} 편으로 가정합니다 (가중 {industry_score}점).",
+        f"연매출 규모 상위 {100 - percentile}% 수준 (가중 {revenue_score}점).",
+    ]
+
+    recommended_service = SIZE_TO_SERVICE.get(size_tier, "ESRM")
+
+    if fit_score >= 65:
+        recommendation = "신규 영업 우선순위가 높은 후보입니다. 담당자 컨택을 추천합니다."
+    elif fit_score >= 40:
+        recommendation = "중장기 관찰 후보입니다. 정보 축적과 함께 컨택 시점을 조율하세요."
+    else:
+        recommendation = "현재 시점에서는 우선순위가 낮은 후보입니다."
+
+    return {
+        "market_outlook": market_outlook,
+        "revenue_percentile": percentile,
+        "trend": trend_label,
+        "fit_score": fit_score,
+        "fit_findings": fit_findings,
+        "recommended_service": recommended_service,
+        "recommended_service_desc": ETNERS_SERVICES.get(recommended_service, ""),
+        "recommendation": recommendation,
+    }
+
+
+def generate_etners_market_proposal(account: dict, market_fit: dict) -> dict:
+    """market/fit 분석 결과를 바탕으로 신규 영업(프로스펙팅)용 이트너스 제안서를 만든다."""
+    service = market_fit["recommended_service"]
+    service_label = f"{service} ({ETNERS_SERVICES.get(service, '')})"
+    benefit = ETNERS_SERVICE_BENEFITS.get(service, "경영지원 업무 부담을 줄일 수 있습니다.")
+
+    return {
+        "customer_situation": (
+            f"{account.get('name')}({account.get('industry')}, {account.get('contract_size_tier')}등급)"
+            f" — {market_fit['market_outlook']}"
+        ),
+        "key_problems": [
+            f"적합도 점수 {market_fit['fit_score']}/100 — {market_fit['recommendation']}",
+            *market_fit["fit_findings"],
+        ],
+        "solution_direction": f"이트너스 '{service_label}' 도입을 제안하여 경영지원 업무 효율화를 지원합니다.",
+        "recommended_service": service_label,
+        "expected_effect": benefit,
+        "next_steps": "1차 미팅을 통해 현재 인사/총무 운영 방식을 확인하고, 적합한 서비스 범위를 구체화합니다.",
+    }

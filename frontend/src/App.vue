@@ -14,6 +14,7 @@ const adminLinks = [
   { to: "/admin/opportunities", label: "영업기회" },
   { to: "/admin/risk", label: "위험도 관리" },
   { to: "/admin/pipeline", label: "영업현황" },
+  { to: "/admin/proposals", label: "제안서" },
 ];
 const salesLinks = [
   { to: "/sales", label: "대시보드" },
@@ -24,8 +25,9 @@ const salesLinks = [
 ];
 
 function doLogout() {
+  const wasAdmin = auth.isAdmin;
   auth.logout();
-  window.location.href = "/login";
+  window.location.href = wasAdmin ? "/login" : "/login/staff";
 }
 </script>
 
