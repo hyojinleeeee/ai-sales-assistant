@@ -27,7 +27,7 @@ async function submit() {
 <template>
   <div style="max-width:380px;margin:80px auto 0;">
     <div class="card stack">
-      <h2 style="margin:0;">AI Sales Assistant</h2>
+      <h2 style="margin:0;">E:PACE</h2>
       <p class="muted">넥스트라인 영업 지원 시스템에 로그인하세요.</p>
       <div v-if="error" style="background:#fde3e3;color:#c0392b;padding:8px 12px;border-radius:8px;font-size:13px;">{{ error }}</div>
       <form class="stack" @submit.prevent="submit">

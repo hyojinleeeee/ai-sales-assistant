@@ -27,7 +27,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False)  # "admin" | "sales"
     emp_code = Column(String, nullable=True)
-    sls_code = Column(String, nullable=True, index=True)
+    sls_code = Column(String, nullable=True, unique=True, index=True)
     display_name = Column(String, nullable=False)
     team = Column(String, nullable=True)
     position = Column(String, nullable=True)

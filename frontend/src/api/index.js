@@ -2,7 +2,11 @@ import axios from "axios";
 import router from "../router";
 import { useAuthStore } from "../stores/authStore";
 
-const http = axios.create({ baseURL: "/api" });
+// 로컬 개발: vite.config.js의 /api 프록시를 그대로 사용.
+// 배포 환경: 프론트엔드와 백엔드가 서로 다른 Vercel 프로젝트(다른 도메인)이므로
+// 빌드 시점에 VITE_API_BASE로 실제 백엔드 주소를 주입한다.
+const baseURL = import.meta.env.VITE_API_BASE || "/api";
+const http = axios.create({ baseURL });
 
 http.interceptors.request.use((config) => {
   const auth = useAuthStore();

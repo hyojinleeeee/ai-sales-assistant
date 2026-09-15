@@ -32,13 +32,13 @@ function doLogout() {
 <template>
   <div class="shell">
     <header v-if="showNav" class="topbar">
-      <div class="brand"><span class="brand-dot"></span>AI Sales Assistant</div>
+      <div class="brand"><span class="brand-dot"></span>E:PACE</div>
       <nav>
         <router-link v-for="l in auth.isAdmin ? adminLinks : salesLinks" :key="l.to" :to="l.to">{{ l.label }}</router-link>
       </nav>
       <div class="who">
         <span class="who-name">{{ auth.user?.display_name }}</span>
-        <span class="who-role">{{ auth.isAdmin ? '관리자' : '조직원' }}</span>
+        <span class="who-role" v-if="!auth.isAdmin">조직원</span>
         <button @click="doLogout">로그아웃</button>
       </div>
     </header>

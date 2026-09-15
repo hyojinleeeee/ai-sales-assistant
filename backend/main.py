@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import DB_PATH
 from init_db import seed
 from routers import (
     accounts,
@@ -29,17 +28,17 @@ from routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not os.path.exists(DB_PATH):
-        print("[INFO] DB 파일이 없어 시드를 실행합니다.")
     seed()
     yield
 
 
 app = FastAPI(title="AI Sales Assistant API", version="1.0.0", lifespan=lifespan)
 
+# 로컬 개발 서버 + Vercel에 배포된 프론트엔드(매 배포마다 서브도메인이 바뀔 수 있어 정규식으로 허용) 모두 허용.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5177"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
