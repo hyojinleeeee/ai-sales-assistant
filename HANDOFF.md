@@ -149,6 +149,7 @@ npm run dev              # http://localhost:5177
 - 관리자용 "고객 정보 수정" API(`PUT /api/accounts/{code}`)는 백엔드엔 있지만 프론트 UI에서는 아직 연결 안 됨 (조회만 가능)
 - JWT `SECRET_KEY`가 코드에 하드코딩됨 (교육용이라 의도적, 실서비스 전환 시 환경변수로 변경 필요)
 - Supabase 무료 요금제 활성 프로젝트 2개 제한 — 위 §9 스키마 격리로 우회 중
+- **다른 라우터에도 남아있을 수 있는 N+1 패턴 주의** — §12-b에서 고친 것은 dashboard/admin과 accounts 목록 뿐. `opportunities.py`의 recompute 등 계정 수만큼 반복 쿼리하는 곳이 더 있으면 원격 Postgres에서 똑같이 느려질 수 있음. 새 목록/집계형 엔드포인트를 만들 때는 "계정마다 쿼리 N번" 패턴을 피하고 `WHERE code IN (...)`로 한 번에 가져오는 습관을 들일 것.
 
 ---
 
@@ -164,6 +165,23 @@ npm run dev              # http://localhost:5177
 8. ESRM 톤앤매너로 전체 디자인 리터치 (Noto Sans KR, 라운드/소프트 섀도우)
 9. 사이트명 "E:PACE"로 리브랜딩
 10. GitHub(공개) + Vercel(프론트/백엔드 분리 배포) + Supabase(스키마 격리) 로 실제 배포, 라이브 URL로 접속 가능하게 완료
+11. 라우터 없이 바로 도메인 열면 빈 화면 뜨는 버그 발견 → `/` 및 미매칭 경로를 `/login`으로 리다이렉트하도록 수정
+12. 배포 후 로그인/대시보드가 실제로는 안 되는(멈추는) 문제 발생 → 아래 12-b 참고, 원인 파악 후 해결
+
+### 12-b. 배포 트러블슈팅 기록 (다시 겪지 않도록 원인과 결론을 남김)
+
+배포 직후 "로그인은 되는데 대시보드가 계속 로딩만 됨" 증상이 있었음. 원인을 좁혀나간 과정:
+
+1. **1차 의심 — Vercel 루트 디렉토리 설정**: 레포에 `backend/`, `frontend/` 둘 다 있는데 Vercel 프로젝트의 Root Directory를 안 정해놔서, git 자동배포 빌드가 "vite: command not found"로 실패함. → `vercel project update <name> --root-directory frontend|backend`로 해결.
+2. **2차 의심 — SPA 라우팅 404**: 루트 디렉토리를 고치고 나니, 로그인 후 `/admin`으로 이동할 때 404가 남. Vue Router가 history 모드라 하드 네비게이션 시 서버가 `index.html`을 돌려줘야 하는데, 프레임워크 자동인식이 리셋되면서 이 처리가 빠짐. → `frontend/vercel.json`에 `{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}` 추가로 해결.
+3. **3차 삽질 — `/api/*`를 백엔드로 프록시하려던 시도는 실패**: 프론트·백엔드가 서로 다른 Vercel 프로젝트(다른 도메인)라 CORS가 걱정돼서, `vercel.json` rewrite로 `/api/*`를 백엔드 절대 URL로 넘기는 same-origin 프록시를 시도했었음. **결과: `Authorization` 헤더가 실린 요청만 응답 없이 무한 행(hang)**(헤더 없는 요청은 정상 프록시됨) — Vercel의 rewrite-to-다른-프로젝트 기능이 인증 헤더를 못 넘기거나 자체 인증 로직과 충돌하는 것으로 추정됨. **결론: 이 프록시 방식은 폐기**, 프론트가 백엔드 절대 URL(`VITE_API_BASE`)을 직접 호출하는 cross-origin 방식으로 되돌림 (CORS는 백엔드 `main.py`의 `allow_origin_regex`로 이미 허용돼 있어 문제 없음).
+4. **진짜 원인 — N+1 쿼리**: 위 조치들은 다 맞는 방향이었지만 그래도 대시보드가 여전히 느리게(결국 타임아웃까지) 멈췄음. 알고 보니 `dashboard.py`의 `admin_dashboard()`가 담당자 40명 각각에 대해 3번씩(최대 120번), `accounts.py`의 `list_accounts()`가 거래처 60개 각각에 대해 3번씩(최대 180번) **개별 DB 쿼리**를 날리고 있었음. 로컬 SQLite에선 이게 안 느껴졌지만, 원격 Supabase Postgres(왕복 지연 있음)에서는 요청 하나가 수백 번의 네트워크 왕복이 되어 버림 — 반복 테스트로 커넥션 풀까지 눌러써서 결국 행(hang)처럼 보였음. **해결: 계정 코드 리스트로 `WHERE code IN (...)` 한 번씩만 조회해서 메모리에서 집계**하도록 두 함수를 재작성 (§11의 N+1 경고 참고). 로컬에서 같은 원격 DB로 재측정한 결과 무한 대기 → **0.05초**.
+
+이 순서대로 원인이 겹쳐 있었기 때문에 하나씩 고칠 때마다 "이제 됐나?" 싶었다가 다음 증상이 나온 것 — 1~4번을 다 고쳤는데도 증상이 남아 5번째 원인이 하나 더 있었음.
+
+5. **5차 원인 — 프론트가 여러 API를 `Promise.all`로 동시에 쏘는 패턴**: N+1을 고쳐서 API 하나하나는 빨라졌는데(로컬에서 원격 DB로 재보니 0.05초), 그래도 배포된 사이트에서는 여전히 가끔 멈췄음. `performance.getEntriesByType('resource')`로 실측해보니, `AdminDashboardView`가 `/dashboard/admin`과 `/accounts`를 **동시에** 호출하고 있었고(부서 필터용 계정 목록을 항상 미리 받아둠), `PipelineMonitorView`는 `/pipeline/summary`+`/users`+`/accounts`+`/meetings` **4개를 동시에** 호출하고 있었음. 같은 순간에 여러 개의 서버리스 함수 호출이 동시에 들어가면 Vercel이 각각 별도 컨테이너를 콜드스타트시키면서 Supabase 커넥션 풀(pgbouncer transaction pool)을 동시에 눌러써서, 어떤 요청은 2초, 어떤 요청은 8~11초+로 튀는 현상이 실측됨(`/api/accounts`가 11초 넘게 응답을 안 준 사례 있음). **해결**: (a) `AdminDashboardView`는 계정 목록을 대시보드 로딩과 분리해 **부서를 실제로 선택했을 때만, 한 번만** 지연 로딩하도록 변경. (b) 나머지 화면(`PipelineMonitorView`, `RiskListView`)은 `Promise.all` 대신 **순서대로 하나씩 await**하도록 변경 — 화면이 살짝 늦게 다 뜨는 대신, 동시 콜드스타트/커넥션 경합을 피해 훨씬 안정적으로 완료됨.
+
+**교훈**: 원격 서버리스 백엔드를 상대할 땐 프론트에서 "한 화면에 필요한 데이터 여러 개를 Promise.all로 병렬 호출"하는 흔한 패턴이 오히려 독이 될 수 있음. 화면 진입 시 정말 다 동시에 필요한 게 아니면, 순차 호출이나 지연 로딩을 기본값으로 고려할 것.
 
 ---
 
