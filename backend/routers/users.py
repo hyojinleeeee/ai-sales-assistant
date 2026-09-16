@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import hash_password, require_admin
@@ -14,8 +15,7 @@ from schemas import (
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-def _user_out(u: User, db: Session) -> dict:
-    account_count = db.query(Account).filter(Account.rep_sls_code == u.sls_code).count()
+def _user_out(u: User, account_count: int) -> dict:
     return {
         "id": u.id,
         "username": u.username,
@@ -32,8 +32,19 @@ def _user_out(u: User, db: Session) -> dict:
 
 @router.get("")
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """
+    _user_out()이 유저마다 db.query(Account).count()를 날리면 40명 기준 40번의
+    원격 Postgres 왕복이 순차로 발생해 응답이 수 초씩 걸린다(파이프라인 화면의
+    부서 목록이 안 뜨는 것처럼 보였던 원인). 계정 수를 한 번의 group by로 미리
+    집계해 메모리에서 매칭한다.
+    """
     users = db.query(User).filter(User.role == "sales").order_by(User.display_name).all()
-    return _build_response([_user_out(u, db) for u in users])
+    counts = dict(
+        db.query(Account.rep_sls_code, func.count(Account.code))
+        .group_by(Account.rep_sls_code)
+        .all()
+    )
+    return _build_response([_user_out(u, counts.get(u.sls_code, 0)) for u in users])
 
 
 @router.post("")
@@ -58,7 +69,7 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_response(_user_out(user, db))
+    return _build_response(_user_out(user, 0))
 
 
 @router.put("/{user_id}")
@@ -75,7 +86,8 @@ def update_user(
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
-    return _build_response(_user_out(user, db))
+    account_count = db.query(Account).filter(Account.rep_sls_code == user.sls_code).count()
+    return _build_response(_user_out(user, account_count))
 
 
 @router.put("/{user_id}/deactivate")
