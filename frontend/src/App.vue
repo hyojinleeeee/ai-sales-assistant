@@ -33,7 +33,7 @@ function doLogout() {
 <template>
   <div class="shell">
     <header v-if="showNav" class="topbar">
-      <div class="brand"><span class="brand-dot"></span>E:PACE</div>
+      <div class="brand"><img src="/epace-logo.png" alt="E:PACE" class="brand-logo" /></div>
       <nav>
         <router-link v-for="l in auth.isAdmin ? adminLinks : salesLinks" :key="l.to" :to="l.to">{{ l.label }}</router-link>
       </nav>
@@ -95,11 +95,8 @@ h2 { font-size: 21px; font-weight: 700; margin: 0 0 18px; }
   box-shadow: var(--shadow-sm);
   position: sticky; top: 0; z-index: 10;
 }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 900; font-size: 16px; white-space: nowrap; color: var(--ink); }
-.brand-dot {
-  width: 11px; height: 11px; border-radius: 50%;
-  background: var(--accent-gradient); display: inline-block;
-}
+.brand { display: flex; align-items: center; white-space: nowrap; }
+.brand-logo { height: 26px; width: auto; display: block; }
 .topbar nav { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; height: 100%; }
 .topbar nav a {
   color: var(--ink-muted); text-decoration: none; font-size: 13.5px; font-weight: 500;

@@ -27,7 +27,7 @@ async function submit() {
 <template>
   <div style="max-width:380px;margin:80px auto 0;">
     <div class="card stack">
-      <h2 style="margin:0;">E:PACE</h2>
+      <img src="/epace-logo.png" alt="E:PACE" style="height:40px;width:auto;align-self:flex-start;" />
       <p class="muted">아이디로 로그인하면 권한에 맞는 화면으로 이동합니다.</p>
       <div v-if="error" style="background:#fde3e3;color:#c0392b;padding:8px 12px;border-radius:8px;font-size:13px;">{{ error }}</div>
       <form class="stack" @submit.prevent="submit">
