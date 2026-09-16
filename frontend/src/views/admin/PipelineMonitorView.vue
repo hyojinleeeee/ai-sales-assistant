@@ -17,13 +17,19 @@ const meetings = ref([]); // from /api/meetings
 const selectedDept = ref("전체");
 
 onMounted(async () => {
-  // 4개를 Promise.all로 한꺼번에 쏘면 서버리스 콜드스타트가 겹치고 DB 커넥션 풀도
-  // 동시에 눌러써서 오히려 더 느려진다(원격 Postgres에서 확인됨). 순서대로 하나씩
-  // 불러오면서, 화면 위쪽(전체 파이프라인)부터 먼저 뜨도록 한다.
-  summary.value = await unwrap(http.get("/pipeline/summary"));
-  reps.value = await unwrap(http.get("/users"));
-  accounts.value = await unwrap(http.get("/accounts"));
-  meetings.value = await unwrap(http.get("/meetings"));
+  // 예전엔 /api/users가 조직원마다 DB를 따로 조회하는 N+1 문제로 8초 넘게 걸려서,
+  // 4개를 동시에 쏘면 그 무거운 요청과 커넥션 풀을 다퉈 더 느려졌다. 그 N+1을
+  // 고친 지금은 4개 모두 가벼운 단일 쿼리라 병렬로 불러도 안전하고 훨씬 빠르다.
+  const [summaryData, repsData, accountsData, meetingsData] = await Promise.all([
+    unwrap(http.get("/pipeline/summary")),
+    unwrap(http.get("/users")),
+    unwrap(http.get("/accounts")),
+    unwrap(http.get("/meetings")),
+  ]);
+  summary.value = summaryData;
+  reps.value = repsData;
+  accounts.value = accountsData;
+  meetings.value = meetingsData;
 });
 
 function pct(n, total) {
@@ -118,9 +124,10 @@ const stagePercents = computed(() => {
 
 const accountsForDept = computed(() => {
   if (selectedDept.value === "전체") return [];
+  const stageOrder = summary.value ? summary.value.stages : [];
   return accounts.value
     .filter((a) => repInfo.value[a.rep_sls_code]?.team === selectedDept.value)
-    .sort((a, b) => a.current_stage?.localeCompare(b.current_stage));
+    .sort((a, b) => stageOrder.indexOf(a.current_stage) - stageOrder.indexOf(b.current_stage));
 });
 
 const accountByCode = computed(() => {
