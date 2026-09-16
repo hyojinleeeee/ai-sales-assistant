@@ -57,12 +57,12 @@ function openAccount(code) {
   <div v-if="data">
     <h2>관리자 대시보드</h2>
     <div class="kpi-row">
-      <div class="kpi-tile"><div class="num">{{ data.total_accounts }}</div><div class="label">전체 고객사</div></div>
-      <div class="kpi-tile"><div class="num">{{ data.new_opportunities }}</div><div class="label">신규 영업기회</div></div>
-      <div class="kpi-tile"><div class="num">{{ data.in_progress_accounts }}</div><div class="label">진행 중인 영업</div></div>
-      <div class="kpi-tile"><div class="num">{{ data.upcoming_meetings }}</div><div class="label">미팅 예정</div></div>
-      <div class="kpi-tile"><div class="num">{{ data.proposals_in_progress }}</div><div class="label">제안 진행</div></div>
-      <div class="kpi-tile"><div class="num">{{ data.at_risk_accounts }}</div><div class="label">이탈위험 감지</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/accounts')"><div class="num">{{ data.total_accounts }}</div><div class="label">전체 고객사</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/opportunities')"><div class="num">{{ data.new_opportunities }}</div><div class="label">신규 영업기회</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/pipeline')"><div class="num">{{ data.in_progress_accounts }}</div><div class="label">진행 중인 영업</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/pipeline')"><div class="num">{{ data.upcoming_meetings }}</div><div class="label">미팅 예정</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/proposals')"><div class="num">{{ data.proposals_in_progress }}</div><div class="label">제안 진행</div></div>
+      <div class="kpi-tile" style="cursor:pointer;" @click="router.push('/admin/risk')"><div class="num">{{ data.at_risk_accounts }}</div><div class="label">이탈위험 감지</div></div>
     </div>
 
     <div class="section-title">조직원별 영업 현황</div>
