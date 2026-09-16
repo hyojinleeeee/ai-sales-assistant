@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import http, { invalidateCache, unwrap } from "../../api";
 import { useAuthStore } from "../../stores/authStore";
 
 const route = useRoute();
@@ -20,6 +20,7 @@ onMounted(async () => {
         meeting_id: route.query.meeting_id ? Number(route.query.meeting_id) : null,
       })
     );
+    invalidateCache("/proposals");
   }
 });
 
@@ -34,6 +35,7 @@ async function save() {
       next_steps: proposal.value.next_steps,
     })
   );
+  invalidateCache("/proposals");
   saved.value = true;
   setTimeout(() => (saved.value = false), 2000);
 }

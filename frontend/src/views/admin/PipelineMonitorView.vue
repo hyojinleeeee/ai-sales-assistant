@@ -3,7 +3,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { computed, onMounted, ref } from "vue";
 import { Pie } from "vue-chartjs";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -21,10 +21,10 @@ onMounted(async () => {
   // 4개를 동시에 쏘면 그 무거운 요청과 커넥션 풀을 다퉈 더 느려졌다. 그 N+1을
   // 고친 지금은 4개 모두 가벼운 단일 쿼리라 병렬로 불러도 안전하고 훨씬 빠르다.
   const [summaryData, repsData, accountsData, meetingsData] = await Promise.all([
-    unwrap(http.get("/pipeline/summary")),
-    unwrap(http.get("/users")),
-    unwrap(http.get("/accounts")),
-    unwrap(http.get("/meetings")),
+    unwrap(cachedGet("/pipeline/summary")),
+    unwrap(cachedGet("/users")),
+    unwrap(cachedGet("/accounts")),
+    unwrap(cachedGet("/meetings")),
   ]);
   summary.value = summaryData;
   reps.value = repsData;

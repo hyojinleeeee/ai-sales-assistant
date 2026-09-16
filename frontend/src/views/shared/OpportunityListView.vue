@@ -2,7 +2,7 @@
 import { reactive, ref } from "vue";
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import http, { cachedGet, invalidateCache, unwrap } from "../../api";
 import { useAuthStore } from "../../stores/authStore";
 
 const router = useRouter();
@@ -14,7 +14,7 @@ const loadingFit = ref(null);
 const generating = ref(null);
 
 onMounted(async () => {
-  opportunities.value = await unwrap(http.get("/opportunities"));
+  opportunities.value = await unwrap(cachedGet("/opportunities"));
 });
 
 function open(code) {
@@ -53,6 +53,7 @@ async function generateEtnersProposal(code) {
   generating.value = code;
   try {
     const res = await unwrap(http.post(`/opportunities/${code}/etners-proposal`));
+    invalidateCache("/proposals");
     router.push({ name: auth.isAdmin ? "admin-proposal-edit" : "proposal-edit", params: { id: res.id } });
   } finally {
     generating.value = null;

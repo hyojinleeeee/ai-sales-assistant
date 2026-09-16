@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 import { useAuthStore } from "../../stores/authStore";
 
 const router = useRouter();
@@ -9,7 +9,7 @@ const auth = useAuthStore();
 const proposals = ref([]);
 
 onMounted(async () => {
-  proposals.value = await unwrap(http.get("/proposals"));
+  proposals.value = await unwrap(cachedGet("/proposals"));
 });
 
 function open(id) {

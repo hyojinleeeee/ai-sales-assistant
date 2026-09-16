@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import * as XLSX from "xlsx";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 
 const router = useRouter();
 const accounts = ref([]);
@@ -38,7 +38,7 @@ const filters = ref({
 });
 
 onMounted(async () => {
-  accounts.value = await unwrap(http.get("/accounts"));
+  accounts.value = await unwrap(cachedGet("/accounts"));
 });
 
 const industries = computed(() => ["전체", ...new Set(accounts.value.map((a) => a.industry).filter(Boolean))].sort());

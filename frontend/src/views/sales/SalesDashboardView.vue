@@ -1,13 +1,13 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 
 const router = useRouter();
 const data = ref(null);
 
 onMounted(async () => {
-  data.value = await unwrap(http.get("/dashboard/sales"));
+  data.value = await unwrap(cachedGet("/dashboard/sales"));
 });
 
 function openAccount(code) {

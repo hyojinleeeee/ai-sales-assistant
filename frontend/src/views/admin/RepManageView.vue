@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import http, { unwrap } from "../../api";
+import http, { cachedGet, invalidateCache, unwrap } from "../../api";
 
 const reps = ref([]);
 const accounts = ref([]);
@@ -12,8 +12,8 @@ const search = ref("");
 const filters = ref({ team: "전체", position: "전체", status: "전체" });
 
 async function load() {
-  reps.value = await unwrap(http.get("/users"));
-  accounts.value = await unwrap(http.get("/accounts"));
+  reps.value = await unwrap(cachedGet("/users"));
+  accounts.value = await unwrap(cachedGet("/accounts"));
 }
 onMounted(load);
 
@@ -51,12 +51,15 @@ function openAssign(rep) {
 async function saveAssign() {
   await unwrap(http.put(`/users/${assigningFor.value.id}/assignments`, { account_codes: pickedAccounts.value }));
   assigningFor.value = null;
+  invalidateCache("/users");
+  invalidateCache("/accounts");
   await load();
 }
 
 async function deactivate(rep) {
   if (!confirm(`${rep.display_name}님을 비활성화할까요?`)) return;
   await unwrap(http.put(`/users/${rep.id}/deactivate`));
+  invalidateCache("/users");
   await load();
 }
 </script>

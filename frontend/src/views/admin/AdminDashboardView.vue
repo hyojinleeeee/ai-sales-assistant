@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 
 const router = useRouter();
 const data = ref(null);
@@ -10,18 +10,18 @@ const accountsLoading = ref(false);
 const selectedDept = ref("전체");
 
 async function loadDashboard() {
-  data.value = await unwrap(http.get("/dashboard/admin"));
+  data.value = await unwrap(cachedGet("/dashboard/admin"));
 }
 loadDashboard();
 
 // 고객사 목록은 대시보드 로딩과 무관하게, 실제로 특정 부서를 골랐을 때만 필요하다.
-// 항상 같이 불러오면(Promise.all) 서버리스 콜드스타트가 겹쳐 대시보드 자체가 느려지므로
-// 부서 선택 시에만, 그리고 한 번만 불러온다.
+// 부서 선택 시에만 불러오되, cachedGet 덕분에 다른 화면에서 이미 불러온 목록이
+// 있으면(30초 이내) 재요청 없이 바로 쓴다.
 watch(selectedDept, async (dept) => {
   if (dept === "전체" || accounts.value.length || accountsLoading.value) return;
   accountsLoading.value = true;
   try {
-    accounts.value = await unwrap(http.get("/accounts"));
+    accounts.value = await unwrap(cachedGet("/accounts"));
   } finally {
     accountsLoading.value = false;
   }

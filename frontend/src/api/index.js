@@ -48,4 +48,28 @@ export async function unwrap(promise) {
   return res.data.data;
 }
 
+// 화면을 옮길 때마다 같은 목록(고객사/조직원/파이프라인 등)을 매번 새로 불러오면
+// 백엔드가 아무리 빨라도 클릭할 때마다 로딩이 보인다. 짧은 시간(30초) 안의 재방문은
+// 캐시된 응답을 즉시 돌려주고, 배정/비활성화처럼 그 목록을 바꾸는 동작 뒤에는
+// invalidateCache로 해당 캐시만 지워 다음 조회에서 다시 받아오게 한다.
+const _getCache = new Map();
+const DEFAULT_CACHE_TTL_MS = 30000;
+
+export function cachedGet(url, ttlMs = DEFAULT_CACHE_TTL_MS) {
+  const hit = _getCache.get(url);
+  if (hit && Date.now() - hit.ts < ttlMs) {
+    return Promise.resolve(hit.res);
+  }
+  return http.get(url).then((res) => {
+    _getCache.set(url, { res, ts: Date.now() });
+    return res;
+  });
+}
+
+export function invalidateCache(prefix) {
+  for (const key of _getCache.keys()) {
+    if (key.startsWith(prefix)) _getCache.delete(key);
+  }
+}
+
 export default http;

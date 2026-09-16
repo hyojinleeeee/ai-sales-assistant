@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import http, { unwrap } from "../../api";
+import { cachedGet, unwrap } from "../../api";
 import { useAuthStore } from "../../stores/authStore";
 
 const router = useRouter();
@@ -11,10 +11,14 @@ const accounts = ref([]);
 const renewalOnly = ref(false);
 
 onMounted(async () => {
-  // 동시 요청은 원격 Postgres에서 콜드스타트/커넥션풀 경합으로 오히려 느려질 수 있어
-  // 순서대로 불러온다.
-  risks.value = await unwrap(http.get("/risk"));
-  accounts.value = await unwrap(http.get("/accounts"));
+  // /risk, /accounts 모두 이제 가볍고 빠른 단일 쿼리라 동시에 불러와도
+  // 커넥션 풀 경합이 없다.
+  const [risksData, accountsData] = await Promise.all([
+    unwrap(cachedGet("/risk")),
+    unwrap(cachedGet("/accounts")),
+  ]);
+  risks.value = risksData;
+  accounts.value = accountsData;
 });
 
 const accountInfo = computed(() => {
